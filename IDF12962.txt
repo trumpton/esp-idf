@@ -1,0 +1,53 @@
+diff --git a/components/esp_http_client/esp_http_client.c b/components/esp_http_client/esp_http_client.c
+index 4d8aeea7e0..aea3622500 100644
+--- a/components/esp_http_client/esp_http_client.c
++++ b/components/esp_http_client/esp_http_client.c
+@@ -505,7 +505,6 @@ static esp_err_t esp_http_client_prepare(esp_http_client_handle_t client)
+             client->auth_data->uri = client->connection_info.path;
+             client->auth_data->cnonce = ((uint64_t)esp_random() << 32) + esp_random();
+             auth_response = http_auth_digest(client->connection_info.username, client->connection_info.password, client->auth_data);
+-            client->auth_data->nc ++;
+         }
+ 
+         if (auth_response) {
+diff --git a/components/esp_http_client/lib/http_auth.c b/components/esp_http_client/lib/http_auth.c
+index 0eb19651f4..6d0fcc5abf 100644
+--- a/components/esp_http_client/lib/http_auth.c
++++ b/components/esp_http_client/lib/http_auth.c
+@@ -123,9 +123,33 @@ char *http_auth_digest(const char *username, const char *password, esp_http_auth
+             goto _digest_exit;
+         }
+     }
+-    asprintf(&auth_str, "Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", algorithm=\"MD5\", "
+-             "response=\"%s\", qop=%s, nc=%08x, cnonce=\"%016llx\"",
+-             username, auth_data->realm, auth_data->nonce, auth_data->uri, digest, auth_data->qop, auth_data->nc, auth_data->cnonce);
++
++    int rc = asprintf(&auth_str, "Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", algorithm=%s, "
++                      "response=\"%s\"", username, auth_data->realm, auth_data->nonce, auth_data->uri, auth_data->algorithm, digest);
++    if (rc < 0) {
++        ESP_LOGE(TAG, "asprintf() returned: %d", rc);
++        ret = ESP_FAIL;
++        goto _digest_exit;
++    }
++
++    if (auth_data->qop) {
++        rc = asprintf(&temp_auth_str, "%s, qop=%s, nc=%08x, cnonce=\"%016"PRIx64"\"", auth_str, auth_data->qop, auth_data->nc, auth_data->cnonce);
++        if (rc < 0) {
++            ESP_LOGE(TAG, "asprintf() returned: %d", rc);
++            ret = ESP_FAIL;
++            goto _digest_exit;
++        }
++        free(auth_str);
++        rc = asprintf(&auth_str, "%s", temp_auth_str);
++        if (rc < 0) {
++            ESP_LOGE(TAG, "asprintf() returned: %d", rc);
++            ret = ESP_FAIL;
++            goto _digest_exit;
++        }
++        auth_data->nc ++;
++
++    }
++
+     if (auth_data->opaque) {
+         asprintf(&temp_auth_str, "%s, opaque=\"%s\"", auth_str, auth_data->opaque);
+         free(auth_str);
