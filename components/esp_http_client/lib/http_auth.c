@@ -66,6 +66,7 @@ char *http_auth_digest(const char *username, const char *password, esp_http_auth
     char *digest = NULL;
     char *auth_str = NULL;
     char *temp_auth_str = NULL;
+    esp_err_t ret = ESP_OK;
 
     if (username == NULL ||
         password == NULL ||
@@ -116,9 +117,33 @@ char *http_auth_digest(const char *username, const char *password, esp_http_auth
             goto _digest_exit;
         }
     }
-    asprintf(&auth_str, "Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", algorithm=\"MD5\", "
-             "response=\"%s\", qop=%s, nc=%08x, cnonce=\"%016llx\"",
-             username, auth_data->realm, auth_data->nonce, auth_data->uri, digest, auth_data->qop, auth_data->nc, auth_data->cnonce);
+
+    int rc = asprintf(&auth_str, "Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", algorithm=%s, "
+                      "response=\"%s\"", username, auth_data->realm, auth_data->nonce, auth_data->uri, auth_data->algorithm, digest);
+    if (rc < 0) {
+        ESP_LOGE(TAG, "asprintf() returned: %d", rc);
+        ret = ESP_FAIL;
+        goto _digest_exit;
+    }
+
+    if (auth_data->qop) {
+        rc = asprintf(&temp_auth_str, "%s, qop=%s, nc=%08x, cnonce=\"%016"PRIx64"\"", auth_str, auth_data->qop, auth_data->nc, auth_data->cnonce);
+        if (rc < 0) {
+            ESP_LOGE(TAG, "asprintf() returned: %d", rc);
+            ret = ESP_FAIL;
+            goto _digest_exit;
+        }
+        free(auth_str);
+        rc = asprintf(&auth_str, "%s", temp_auth_str);
+        if (rc < 0) {
+            ESP_LOGE(TAG, "asprintf() returned: %d", rc);
+            ret = ESP_FAIL;
+            goto _digest_exit;
+        }
+        auth_data->nc ++;
+
+    }
+
     if (auth_data->opaque) {
         asprintf(&temp_auth_str, "%s, opaque=\"%s\"", auth_str, auth_data->opaque);
         free(auth_str);
