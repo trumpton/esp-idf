@@ -73,6 +73,7 @@ char *http_auth_digest(const char *username, const char *password, esp_http_auth
     char *digest = NULL;
     char *auth_str = NULL;
     char *temp_auth_str = NULL;
+    esp_err_t ret = ESP_OK;
 
     if (username == NULL ||
         password == NULL ||
